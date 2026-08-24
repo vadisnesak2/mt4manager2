@@ -1,0 +1,69 @@
+name: Build MT4 AutoTrading Emergency Manager
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main", "master" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Windows x64 EXE
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build Release x64
+        shell: pwsh
+        run: |
+          msbuild "$env:GITHUB_WORKSPACE\MT4_AutoTrading_Emergency_Manager.sln" `
+            /m `
+            /p:Configuration=Release `
+            /p:Platform=x64 `
+            /verbosity:minimal
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "MSBuild failed with exit code $LASTEXITCODE"
+          }
+
+      - name: Verify EXE
+        shell: pwsh
+        run: |
+          $exe = "$env:GITHUB_WORKSPACE\bin\Release\MT4_AutoTrading_Emergency_Manager.exe"
+
+          if (-not (Test-Path $exe)) {
+            Write-Host "EXE not found. Searching build output..."
+            Get-ChildItem "$env:GITHUB_WORKSPACE" -Recurse -Filter *.exe |
+              Select-Object FullName, Length, LastWriteTime
+            throw "Expected EXE was not produced."
+          }
+
+          Get-Item $exe | Format-List FullName, Length, LastWriteTime
+
+      - name: Upload EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: MT4_AutoTrading_Emergency_Manager-windows-x64
+          path: bin/Release/MT4_AutoTrading_Emergency_Manager.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload source
+        uses: actions/upload-artifact@v4
+        with:
+          name: MT4_AutoTrading_Emergency_Manager-source
+          path: |
+            MT4_AutoTrading_Emergency_Manager.cpp
+            MT4_AutoTrading_Emergency_Manager.sln
+            MT4_AutoTrading_Emergency_Manager.vcxproj
+            README.md
+            .github/workflows/build.yml
+          if-no-files-found: error
+          retention-days: 30
